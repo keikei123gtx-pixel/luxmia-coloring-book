@@ -1,5 +1,5 @@
-# Gemini API (text generation)
-google-generativeai>=0.8.0
+# Gemini API (text generation) — 新SDK: google-genai
+google-genai>=1.0.0
 
 # Image processing
 Pillow>=10.3.0

@@ -18,7 +18,7 @@ from typing import Optional
 import requests
 from PIL import Image
 import img2pdf
-import google.generativeai as genai
+from google import genai
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -43,6 +43,7 @@ A4_HEIGHT_PX = int(A4_HEIGHT_MM / 25.4 * DPI)  # 3508 px
 BINARIZE_THRESHOLD = 200   # pixels above → white, below → black
 NUM_THEMES = 5
 MAX_RETRIES = 3
+GEMINI_MODEL = "gemini-2.5-flash"
 GEMINI_BASE_DELAY = 15.0   # seconds; Gemini free tier: 15 RPM
 IMAGE_BASE_DELAY = 8.0     # seconds; Pollinations AI retry base delay
 IMAGE_COOLDOWN = 5.0       # wait between successive Pollinations requests
@@ -76,11 +77,10 @@ def retry(func, *args, retries: int = MAX_RETRIES, base_delay: float = 10.0, **k
 
 
 # ---------------------------------------------------------------------------
-# Step 1: Theme generation via Gemini
+# Step 1: Theme generation via Gemini (google-genai SDK)
 # ---------------------------------------------------------------------------
 def generate_themes(api_key: str) -> list[str]:
-    genai.configure(api_key=api_key)
-    model = genai.GenerativeModel("gemini-1.5-flash")
+    client = genai.Client(api_key=api_key)
 
     prompt = (
         "You are helping create an adult coloring book for women in their 40s-50s.\n"
@@ -95,12 +95,13 @@ def generate_themes(api_key: str) -> list[str]:
         "Generate now:"
     )
 
-    logger.info("Calling Gemini API (gemini-1.5-flash) to generate themes …")
+    logger.info("Calling Gemini API (%s) to generate themes …", GEMINI_MODEL)
     response = retry(
-        model.generate_content,
-        prompt,
+        client.models.generate_content,
         retries=MAX_RETRIES,
         base_delay=GEMINI_BASE_DELAY,
+        model=GEMINI_MODEL,
+        contents=prompt,
     )
 
     themes: list[str] = []
