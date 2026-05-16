@@ -93,7 +93,7 @@ jobs:
       - name: Inspect downloaded tracks
         run: |
           echo "=== all_k_music/assets/tracks/ ==="
-          find all_k_music/assets/tracks/ -name "*.mp3" | sort || echo "(MP3 なし — DEMO モードで実行します)"
+          find all_k_music/assets/tracks/ -name "*.mp3" | sort || echo "(MP3 なし)"
           echo "=== all_k_music/logs/music_assets.json ==="
           python3 -c "
           import json, pathlib
@@ -106,6 +106,31 @@ jobs:
           else:
               print('  (ファイルなし)')
           "
+
+      # ── 5b. テスト音源を自動生成 (実 MP3 が 0 件の場合のみ) ─────────────
+      #   SUNO_COOKIE 未設定の DEMO 環境や CI テスト時に使用。
+      #   ffmpeg の lavfi で 90 秒のサイン波 MP3 を 4 ジャンル分生成する。
+      #   本番 (LIVE MODE) では Phase 1 の実 MP3 が tracks/ に存在するためスキップ。
+      - name: Generate test audio (if no real MP3s available)
+        run: |
+          MP3_COUNT=$(find all_k_music/assets/tracks/ -name "*.mp3" 2>/dev/null | wc -l | tr -d ' ')
+          if [ "$MP3_COUNT" -eq 0 ]; then
+            echo "::warning::実 MP3 が 0 件 → ffmpeg でテスト用サイン波 MP3 を生成します (各90秒)"
+            TODAY=$(date +%Y%m%d)
+            declare -A FREQS=([lofi]=220 [edm]=440 [ambient]=110 [synthwave]=330)
+            for SLUG in lofi edm ambient synthwave; do
+              FREQ=${FREQS[$SLUG]}
+              OUT="all_k_music/assets/tracks/${TODAY}_${SLUG}_TEST.mp3"
+              ffmpeg -y -f lavfi \
+                -i "sine=frequency=${FREQ}:duration=90" \
+                -q:a 2 "$OUT" -loglevel error
+              SIZE=$(du -k "$OUT" | cut -f1)
+              echo "  ✓ ${OUT##*/}  (${SIZE}KB  ${FREQ}Hz  90s)"
+            done
+          else
+            echo "::notice::実 MP3 ${MP3_COUNT} 件を検出 → テスト音源の生成をスキップ"
+            find all_k_music/assets/tracks/ -name "*.mp3" | sort
+          fi
 
       # ── 6. Phase 2 実行 (メドレー + DNA + サムネイル) ────────────────────
       - name: Phase 2 — メドレー生成 + Human DNA + サムネイル
