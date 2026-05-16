@@ -32,14 +32,13 @@ from typing import List, Optional
 ROOT = Path(__file__).parent
 sys.path.insert(0, str(ROOT))
 
+# Phase 0 / 共通: 軽量モジュールのみトップレベルで import
 from src.trend_curator import TrendCurator
-from src.suno_downloader import SunoConfig, SunoDownloader
-from src.medley_builder import build_medley, SEGMENT_DURATION, NUM_SEGMENTS
-from src.human_dna import apply_dna, describe_dna
-from src.thumbnail_maker import make_thumbnail
-from src.video_encoder import encode_all
-from src.seo_writer import generate_seo_package, save_seo_txt
+from src.human_dna import describe_dna
 from src.asset_vault import stamp_entry, append_vault, verify_entry, read_vault
+
+# Phase 1-3 固有モジュールは各 run_phase*() 内で遅延 import
+# → Phase 0 が Pillow / ffmpeg なしで動作できるようにする
 
 # ── ロギング設定 ───────────────────────────────────────────────────────────
 logging.basicConfig(
@@ -189,6 +188,8 @@ def run_phase0(genre_filter: Optional[str] = None) -> None:
 # Phase 1: Suno AI 楽曲生成
 # ─────────────────────────────────────────────────────────────────────────────
 def run_phase1(genre_filter: Optional[str] = None) -> None:
+    from src.suno_downloader import SunoConfig, SunoDownloader  # noqa: PLC0415
+
     logger.info("════════════════════════════════════════════════════════════")
     logger.info("  Phase 1 — Suno AI 楽曲資産蓄積 + 証拠台帳記録")
     logger.info("════════════════════════════════════════════════════════════")
@@ -254,6 +255,10 @@ def run_phase1(genre_filter: Optional[str] = None) -> None:
 # Phase 2: メドレー + Human DNA + サムネイル
 # ─────────────────────────────────────────────────────────────────────────────
 def run_phase2(genre_filter: Optional[str] = None) -> None:
+    from src.medley_builder import build_medley  # noqa: PLC0415
+    from src.human_dna import apply_dna          # noqa: PLC0415
+    from src.thumbnail_maker import make_thumbnail  # noqa: PLC0415
+
     logger.info("════════════════════════════════════════════════════════════")
     logger.info("  Phase 2 — 神繋ぎメドレー + Human DNA トッピング + サムネイル")
     logger.info("════════════════════════════════════════════════════════════")
@@ -341,6 +346,10 @@ def run_phase2(genre_filter: Optional[str] = None) -> None:
 # Phase 3: 動画エンコード + SEO
 # ─────────────────────────────────────────────────────────────────────────────
 def run_phase3(genre_filter: Optional[str] = None) -> None:
+    from src.video_encoder import encode_all          # noqa: PLC0415
+    from src.seo_writer import generate_seo_package, save_seo_txt  # noqa: PLC0415
+    from src.thumbnail_maker import make_thumbnail    # noqa: PLC0415
+
     logger.info("════════════════════════════════════════════════════════════")
     logger.info("  Phase 3 — 動画エンコード + SEO パッケージ生成")
     logger.info("════════════════════════════════════════════════════════════")
@@ -386,6 +395,10 @@ def _encode_for_slug(
     asset_log: list,
     entry: Optional[dict] = None,
 ) -> None:
+    from src.video_encoder import encode_all          # noqa: PLC0415
+    from src.seo_writer import generate_seo_package, save_seo_txt  # noqa: PLC0415
+    from src.thumbnail_maker import make_thumbnail    # noqa: PLC0415
+
     logger.info("\n── Phase3: %s  |  %s", slug, medley_path.name)
 
     cover = entry.get("cover_path", "") if entry else ""
