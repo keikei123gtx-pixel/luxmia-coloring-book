@@ -11,7 +11,7 @@ on:
 jobs:
   generate:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45   # multi-agent: 3x Gemini calls + 5x image gen
 
     steps:
       # ── 1. リポジトリのチェックアウト ─────────────────────────────────
@@ -36,12 +36,13 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: python generate_coloring_book.py
 
-      # ── 5. 生成された PDF を Artifacts として保存 ──────────────────────
-      - name: Upload output PDF as artifact
+      # ── 5. output/ フォルダ全体を Artifacts として保存 ────────────────
+      # 内容: output.pdf (塗り絵本) + kdp_meta.txt (KDP SEOメタデータ)
+      - name: Upload output artifacts
         uses: actions/upload-artifact@v4
-        if: always()   # スクリプトが部分的に失敗しても生成済みファイルを保存
+        if: always()   # 部分失敗でも生成済みファイルを保存
         with:
           name: coloring-book-run-${{ github.run_number }}
-          path: output/output.pdf
+          path: output/
           retention-days: 30
           if-no-files-found: warn
