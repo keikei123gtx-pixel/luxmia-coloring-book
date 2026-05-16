@@ -1,0 +1,181 @@
+name: All k Music — Phase 3 動画エンコード + SEO
+
+on:
+  # Phase 2 完了時に自動チェーン (成功時のみ)
+  workflow_run:
+    workflows: ["All k Music — Phase 2 メドレー + Human DNA + サムネイル"]
+    types: [completed]
+
+  # 手動実行
+  workflow_dispatch:
+    inputs:
+      source_run_id:
+        description: "Phase 2 の Actions Run ID (省略時は既存 medley/ を使用)"
+        required: false
+        default: ""
+      genre:
+        description: "ジャンルを絞り込む場合に指定"
+        required: false
+        default: ""
+        type: choice
+        options:
+          - ""
+          - lofi
+          - edm
+          - ambient
+          - synthwave
+
+# music_assets.json + SEO テキストをリポジトリに書き戻すために必要
+permissions:
+  contents: write
+
+jobs:
+  phase3:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90   # 1時間動画エンコード × 4 ジャンル × 2形式 (通常 + Shorts)
+
+    # workflow_run トリガー時: Phase 2 が成功した場合のみ実行
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+
+    steps:
+      # ── 1. チェックアウト ────────────────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ── 2. Python セットアップ ───────────────────────────────────────────
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      # ── 3. ffmpeg + 依存ライブラリ ────────────────────────────────────────
+      - name: Install ffmpeg
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg
+          ffmpeg -version | head -1
+
+      - name: Install Python dependencies
+        run: pip install --upgrade pip && pip install requests Pillow
+
+      # ── 4. Phase 2 Artifact からメドレー + サムネイルをダウンロード ───────
+      #   workflow_run: Phase 2 の当該 run から自動取得
+      #   workflow_dispatch + source_run_id 指定: 指定 run から取得
+      #   workflow_dispatch + source_run_id 未指定: リポジトリの thumbnails/ +
+      #                                             既存 medley/ を使用
+      - name: Download Phase 2 medley artifact (workflow_run)
+        if: github.event_name == 'workflow_run'
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: ${{ github.event.workflow_run.id }}
+          pattern: allk-medley-*
+          merge-multiple: true
+          path: all_k_music/assets/
+
+      - name: Download Phase 2 medley artifact (workflow_dispatch)
+        if: >-
+          github.event_name == 'workflow_dispatch' &&
+          github.event.inputs.source_run_id != ''
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: ${{ github.event.inputs.source_run_id }}
+          pattern: allk-medley-*
+          merge-multiple: true
+          path: all_k_music/assets/
+
+      # ── 5. ダウンロードされたアセットを確認 ─────────────────────────────
+      - name: Inspect assets
+        run: |
+          echo "=== medley/ ==="
+          find all_k_music/assets/medley/ -name "*.mp3" | sort || echo "(MP3 なし)"
+          echo "=== thumbnails/ ==="
+          find all_k_music/assets/thumbnails/ -name "*.jpg" | sort || echo "(JPG なし)"
+          echo "=== music_assets.json ==="
+          python3 -c "
+          import json, pathlib
+          p = pathlib.Path('all_k_music/logs/music_assets.json')
+          if p.exists():
+              for e in json.loads(p.read_text()):
+                  print(f'  - {e[\"asset_id\"]} | {e[\"genre_slug\"]} | phase={e[\"phase\"]}')
+          else:
+              print('  (ファイルなし)')
+          "
+
+      # ── 6. Phase 3 実行 (動画エンコード + SEO 生成) ──────────────────────
+      - name: Phase 3 — 動画エンコード + SEO
+        working-directory: all_k_music
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          GENRE_ARG=""
+          if [ -n "${{ github.event.inputs.genre }}" ]; then
+            GENRE_ARG="--genre ${{ github.event.inputs.genre }}"
+          fi
+
+          if [ -n "$GEMINI_API_KEY" ]; then
+            echo "::notice::GEMINI_API_KEY 確認済み → SEO を Gemini で強化します"
+          else
+            echo "::warning::GEMINI_API_KEY 未設定 → テンプレート SEO で実行します"
+          fi
+
+          python main.py --phase 3 $GENRE_ARG
+
+      # ── 7. SEO テキスト + ログをリポジトリに書き戻す ────────────────────
+      #   SEO テキスト (数KB × 4 ジャンル) とログはリポジトリに保存
+      #   動画 MP4 (数百MB) は Artifact のみ
+      - name: Commit SEO texts and logs to repository
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add all_k_music/assets/seo/ \
+                  all_k_music/logs/music_assets.json \
+                  all_k_music/logs/asset_vault.jsonl
+          git diff --staged --quiet \
+            || git commit -m "chore(phase3): SEO + video log $(date -u +%Y-%m-%d) run#${{ github.run_number }} [skip ci]"
+          git push
+
+      # ── 8. 動画ファイルを Artifact として保存 (30日) ─────────────────────
+      #   通常動画 (1時間 MP4) + Shorts (60秒 縦型 MP4) を格納
+      - name: Upload videos as artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: allk-videos-${{ github.run_number }}
+          path: |
+            all_k_music/assets/videos/
+            all_k_music/assets/seo/
+            all_k_music/logs/music_assets.json
+          retention-days: 30
+          if-no-files-found: warn
+
+      # ── 9. 完了サマリー ─────────────────────────────────────────────────
+      - name: Pipeline summary
+        if: always()
+        run: |
+          python3 -c "
+          import json, pathlib, os
+
+          p = pathlib.Path('all_k_music/logs/music_assets.json')
+          if not p.exists():
+              print('music_assets.json が見つかりません')
+              exit(0)
+
+          entries = json.loads(p.read_text())
+
+          print('=' * 55)
+          print('  All k Music — パイプライン完了サマリー')
+          print('=' * 55)
+          for e in entries:
+              print(f'  [{e[\"genre_slug\"]:12}] {e[\"phase\"]:12}  {e[\"status\"]}')
+
+          video_dir = pathlib.Path('all_k_music/assets/videos')
+          vids = list(video_dir.glob('*.mp4')) if video_dir.exists() else []
+          total_mb = sum(v.stat().st_size for v in vids) / 1_048_576
+          print(f'  動画ファイル: {len(vids)} 本  合計 {total_mb:.0f} MB')
+          print('=' * 55)
+          "

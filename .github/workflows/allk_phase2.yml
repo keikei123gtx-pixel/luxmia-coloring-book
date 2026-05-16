@@ -1,0 +1,144 @@
+name: All k Music — Phase 2 メドレー + Human DNA + サムネイル
+
+on:
+  # Phase 1 完了時に自動チェーン (成功時のみ)
+  workflow_run:
+    workflows: ["All k Music — Phase 1 Suno 楽曲生成"]
+    types: [completed]
+
+  # 手動実行
+  workflow_dispatch:
+    inputs:
+      source_run_id:
+        description: "Phase 1 の Actions Run ID (省略時は既存 tracks/ を使用)"
+        required: false
+        default: ""
+      genre:
+        description: "ジャンルを絞り込む場合に指定"
+        required: false
+        default: ""
+        type: choice
+        options:
+          - ""
+          - lofi
+          - edm
+          - ambient
+          - synthwave
+
+# music_assets.json + thumbnails をリポジトリに書き戻すために必要
+permissions:
+  contents: write
+
+jobs:
+  phase2:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60   # DNA 適用 × 4 ジャンル + メドレー生成の余裕
+
+    # workflow_run トリガー時: Phase 1 が成功した場合のみ実行
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+
+    steps:
+      # ── 1. チェックアウト ────────────────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ── 2. Python セットアップ ───────────────────────────────────────────
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      # ── 3. ffmpeg + 依存ライブラリ ────────────────────────────────────────
+      - name: Install ffmpeg
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg
+          ffmpeg -version | head -1
+
+      - name: Install Python dependencies
+        run: pip install --upgrade pip && pip install requests Pillow
+
+      # ── 4. Phase 1 Artifact から MP3 をダウンロード ──────────────────────
+      #   workflow_run: Phase 1 の当該 run から自動取得
+      #   workflow_dispatch + source_run_id 指定: 指定 run から取得
+      #   workflow_dispatch + source_run_id 未指定: スキップ (既存 tracks/ を使用)
+      - name: Download Phase 1 tracks artifact (workflow_run)
+        if: github.event_name == 'workflow_run'
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: ${{ github.event.workflow_run.id }}
+          pattern: allk-tracks-*
+          merge-multiple: true
+          path: all_k_music/assets/tracks/
+
+      - name: Download Phase 1 tracks artifact (workflow_dispatch)
+        if: >-
+          github.event_name == 'workflow_dispatch' &&
+          github.event.inputs.source_run_id != ''
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: ${{ github.event.inputs.source_run_id }}
+          pattern: allk-tracks-*
+          merge-multiple: true
+          path: all_k_music/assets/tracks/
+
+      # ── 5. ダウンロードされた tracks を確認 ─────────────────────────────
+      - name: Inspect downloaded tracks
+        run: |
+          echo "=== all_k_music/assets/tracks/ ==="
+          find all_k_music/assets/tracks/ -name "*.mp3" | sort || echo "(MP3 なし — DEMO モードで実行します)"
+          echo "=== all_k_music/logs/music_assets.json ==="
+          python3 -c "
+          import json, pathlib
+          p = pathlib.Path('all_k_music/logs/music_assets.json')
+          if p.exists():
+              entries = json.loads(p.read_text())
+              print(f'  エントリ数: {len(entries)}')
+              for e in entries:
+                  print(f'  - {e[\"asset_id\"]} | {e[\"genre_slug\"]} | {e[\"status\"]} | {e[\"phase\"]}')
+          else:
+              print('  (ファイルなし)')
+          "
+
+      # ── 6. Phase 2 実行 (メドレー + DNA + サムネイル) ────────────────────
+      - name: Phase 2 — メドレー生成 + Human DNA + サムネイル
+        working-directory: all_k_music
+        run: |
+          GENRE_ARG=""
+          if [ -n "${{ github.event.inputs.genre }}" ]; then
+            GENRE_ARG="--genre ${{ github.event.inputs.genre }}"
+          fi
+          python main.py --phase 2 $GENRE_ARG
+
+      # ── 7. サムネイル + ログをリポジトリに書き戻す ──────────────────────
+      #   サムネイル (JPG ~350KB × 4) はリポジトリに保存
+      #   メドレー MP3 (大容量) は Artifact のみ
+      - name: Commit thumbnails and logs to repository
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add all_k_music/assets/thumbnails/ \
+                  all_k_music/logs/music_assets.json \
+                  all_k_music/logs/asset_vault.jsonl
+          git diff --staged --quiet \
+            || git commit -m "chore(phase2): thumbnails + medley log $(date -u +%Y-%m-%d) run#${{ github.run_number }} [skip ci]"
+          git push
+
+      # ── 8. メドレー + サムネイルを Artifact として保存 (30日) ────────────
+      #   Phase 3 がこの Artifact から medley MP3 を取得する
+      - name: Upload medley and thumbnails as artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: allk-medley-${{ github.run_number }}
+          path: |
+            all_k_music/assets/medley/
+            all_k_music/assets/thumbnails/
+            all_k_music/logs/music_assets.json
+          retention-days: 30
+          if-no-files-found: warn
