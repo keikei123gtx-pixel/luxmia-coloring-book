@@ -601,7 +601,11 @@ def create_pdf(image_paths: list[Path], output_path: Path) -> bool:
     try:
         a4_pt = (img2pdf.mm_to_pt(A4_W_MM), img2pdf.mm_to_pt(A4_H_MM))
         layout = img2pdf.get_layout_fun(a4_pt)
-        pdf_bytes = img2pdf.convert([str(p) for p in image_paths], layout_fun=layout)
+        # img2pdf requires bytes or file-like objects, not str paths
+        pdf_bytes = img2pdf.convert(
+            [p.read_bytes() for p in image_paths],
+            layout_fun=layout,
+        )
         output_path.write_bytes(pdf_bytes)
         mb = output_path.stat().st_size / 1_048_576
         logger.info("[PDF] Saved → %s (%.1f MB, %d pages)", output_path, mb, len(image_paths))
