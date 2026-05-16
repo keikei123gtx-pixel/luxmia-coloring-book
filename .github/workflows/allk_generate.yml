@@ -1,0 +1,112 @@
+name: All k Music — Phase 1 Suno 楽曲生成
+
+on:
+  # 手動実行 (ジャンル絞り込み・ドライラン選択可)
+  workflow_dispatch:
+    inputs:
+      genre:
+        description: "ジャンルを絞り込む場合に指定 (未指定で全4ジャンル)"
+        required: false
+        default: ""
+        type: choice
+        options:
+          - ""
+          - lofi
+          - edm
+          - ambient
+          - synthwave
+      dry_run:
+        description: "Dry run — SUNO_COOKIE を無視して DEMO MODE で実行"
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
+
+  # 毎週月曜 JST 03:00 = UTC 18:00 (日曜) に自動実行
+  # ※週1ペースで楽曲資産を積み上げる。頻度は cron を調整してください。
+  schedule:
+    - cron: "0 18 * * 0"
+
+# music_assets.json / asset_vault.jsonl をリポジトリに書き戻すために必要
+permissions:
+  contents: write
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40   # ポーリング 360s × 最大リトライ 5 × 4 ジャンル の余裕
+
+    steps:
+      # ── 1. チェックアウト ────────────────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ── 2. Python セットアップ ───────────────────────────────────────────
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      # ── 3. 依存ライブラリ ────────────────────────────────────────────────
+      - name: Install dependencies
+        run: pip install --upgrade pip && pip install requests
+
+      # ── 4. Phase 0 を先に実行 (当日の企画書を生成・ログに残す) ──────────
+      - name: Phase 0 — 企画書出力 (今日のシード記録)
+        working-directory: all_k_music
+        run: |
+          GENRE_ARG=""
+          if [ -n "${{ github.event.inputs.genre }}" ]; then
+            GENRE_ARG="--genre ${{ github.event.inputs.genre }}"
+          fi
+          python main.py --phase 0 $GENRE_ARG
+
+      # ── 5. Phase 1 — Suno AI 楽曲生成 ──────────────────────────────────
+      #   SUNO_COOKIE: GitHub Secret → SunoConfig.cookie プロパティが env 優先で読む
+      #   dry_run=true または Secret 未設定時は自動的に DEMO MODE にフォールバック
+      - name: Phase 1 — Suno AI 楽曲生成
+        working-directory: all_k_music
+        env:
+          SUNO_COOKIE: ${{ github.event.inputs.dry_run == 'true' && '' || secrets.SUNO_COOKIE }}
+        run: |
+          GENRE_ARG=""
+          if [ -n "${{ github.event.inputs.genre }}" ]; then
+            GENRE_ARG="--genre ${{ github.event.inputs.genre }}"
+          fi
+
+          if [ -z "$SUNO_COOKIE" ]; then
+            echo "::warning::SUNO_COOKIE が未設定または dry_run=true → DEMO MODE で実行します"
+          else
+            echo "::notice::SUNO_COOKIE 確認済み → LIVE MODE で実行します"
+          fi
+
+          python main.py --phase 1 $GENRE_ARG
+
+      # ── 6. ログ (music_assets.json / asset_vault.jsonl / plans/) を書き戻す ─
+      - name: Commit asset logs to repository
+        working-directory: all_k_music
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add logs/music_assets.json logs/asset_vault.jsonl logs/plans/
+          git diff --staged --quiet \
+            || git commit -m "chore(assets): Phase1 log $(date -u +%Y-%m-%d) run#${{ github.run_number }} [skip ci]"
+          git push
+
+      # ── 7. MP3 + カバー画像を Artifact として保存 (30日) ────────────────
+      #   注: MP3 は容量が大きいためリポジトリには含めず Artifact のみ
+      - name: Upload generated tracks as artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: allk-tracks-${{ github.run_number }}
+          path: |
+            all_k_music/assets/tracks/
+            all_k_music/assets/covers/
+            all_k_music/logs/music_assets.json
+            all_k_music/logs/asset_vault.jsonl
+          retention-days: 30
+          if-no-files-found: warn

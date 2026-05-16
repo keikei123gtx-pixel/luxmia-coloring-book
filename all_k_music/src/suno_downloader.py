@@ -17,6 +17,7 @@ from __future__ import annotations
 import base64
 import json
 import logging
+import os
 import time
 import urllib.parse
 from datetime import datetime, timezone
@@ -68,6 +69,10 @@ class SunoConfig:
 
     @property
     def cookie(self) -> str:
+        # 環境変数 SUNO_COOKIE を優先 (GitHub Actions Secrets 連携用)
+        env_cookie = os.environ.get("SUNO_COOKIE", "").strip()
+        if env_cookie:
+            return env_cookie
         return str(self._d.get("cookie", "")).strip()
 
     @property
