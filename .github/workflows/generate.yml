@@ -1,0 +1,47 @@
+name: Generate Coloring Book
+
+on:
+  # 手動実行
+  workflow_dispatch:
+
+  # 毎日 JST 03:00 = UTC 18:00 に自動実行
+  schedule:
+    - cron: "0 18 * * *"
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      # ── 1. リポジトリのチェックアウト ─────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ── 2. Python セットアップ ────────────────────────────────────────
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      # ── 3. 依存ライブラリのインストール ──────────────────────────────
+      - name: Install dependencies
+        run: pip install --upgrade pip && pip install -r requirements.txt
+
+      # ── 4. メインスクリプトの実行 ─────────────────────────────────────
+      # 画像生成は Pollinations AI (無料・APIキー不要) を使用
+      - name: Generate coloring book PDF
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: python generate_coloring_book.py
+
+      # ── 5. 生成された PDF を Artifacts として保存 ──────────────────────
+      - name: Upload output PDF as artifact
+        uses: actions/upload-artifact@v4
+        if: always()   # スクリプトが部分的に失敗しても生成済みファイルを保存
+        with:
+          name: coloring-book-run-${{ github.run_number }}
+          path: output/output.pdf
+          retention-days: 30
+          if-no-files-found: warn

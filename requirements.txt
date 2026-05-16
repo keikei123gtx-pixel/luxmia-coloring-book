@@ -1,0 +1,11 @@
+# Gemini API (text generation)
+google-generativeai>=0.8.0
+
+# Image processing
+Pillow>=10.3.0
+
+# PDF generation from images
+img2pdf>=0.5.1
+
+# HTTP client (Pollinations AI image download — no API key required)
+requests>=2.32.0
