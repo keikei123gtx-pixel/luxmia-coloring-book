@@ -25,6 +25,8 @@ from typing import Dict, List, Optional
 
 import requests
 
+from src.asset_vault import stamp_entry, append_vault
+
 logger = logging.getLogger(__name__)
 
 # ── API エンドポイント ─────────────────────────────────────────────────────
@@ -150,10 +152,17 @@ class SunoDownloader:
         "Origin":  "https://suno.ai",
     }
 
-    def __init__(self, config: SunoConfig, tracks_dir: Path, covers_dir: Path) -> None:
+    def __init__(
+        self,
+        config: SunoConfig,
+        tracks_dir: Path,
+        covers_dir: Path,
+        vault_path: Optional[Path] = None,
+    ) -> None:
         self.cfg = config
         self.tracks_dir = tracks_dir
         self.covers_dir = covers_dir
+        self.vault_path = vault_path  # 証拠台帳 JSONL パス (None = 無効)
         tracks_dir.mkdir(parents=True, exist_ok=True)
         covers_dir.mkdir(parents=True, exist_ok=True)
 
@@ -206,16 +215,17 @@ class SunoDownloader:
         """
         Suno v2 API に生成リクエストを送信し、clip ID リストを返す。
         """
+        # 安全ロック: continue_clip_id / remix 系は絶対に None/False で送信
         payload = {
-            "prompt":           "",
-            "generation_type":  "TEXT",
-            "tags":             prompt["style_prompt"],
-            "negative_tags":    prompt.get("negative_prompt", ""),
-            "mv":               self.cfg.model_version,
-            "title":            f"{prompt['genre_name']} — All k Music",
-            "make_instrumental": prompt.get("make_instrumental", True),
-            "continue_clip_id": None,
-            "continue_at":      None,
+            "prompt":            "",
+            "generation_type":   "TEXT",
+            "tags":              prompt["style_prompt"],
+            "negative_tags":     prompt.get("negative_prompt", ""),
+            "mv":                self.cfg.model_version,
+            "title":             f"{prompt['genre_name']} — All k Music",
+            "make_instrumental": True,   # 常に True (ボーカル入り生成禁止)
+            "continue_clip_id":  None,   # 常に None (他者楽曲への継続禁止)
+            "continue_at":       None,
         }
         try:
             resp = self._session.post(
@@ -324,15 +334,22 @@ class SunoDownloader:
             encoding="utf-8",
         )
         logger.warning("[DEMO] プレースホルダーを生成: %s", asset_id)
-        return {
-            "asset_id":     asset_id,
-            "suno_clip_id": f"demo-{asset_id}",
-            "title":        f"[DEMO] {prompt['genre_name']}",
-            "mp3_path":     str(mp3_path),
-            "cover_path":   str(cover_path),
-            "audio_url":    "",
-            "status":       "demo",
+        result = {
+            "asset_id":          asset_id,
+            "suno_clip_id":      f"demo-{asset_id}",
+            "title":             f"[DEMO] {prompt['genre_name']}",
+            "mp3_path":          str(mp3_path),
+            "cover_path":        str(cover_path),
+            "audio_url":         "",
+            "status":            "demo",
+            "style_prompt":      prompt.get("style_prompt", ""),
+            "generation_seed":   prompt.get("generation_seed", 0),
         }
+        # 証拠台帳に記録 (DEMOモードでも生成意図を残す)
+        if self.vault_path:
+            stamped = stamp_entry(result, result["generation_seed"], result["style_prompt"])
+            append_vault(stamped, self.vault_path)
+        return result
 
     # ── パブリック API ────────────────────────────────────────────────────
 
@@ -390,12 +407,21 @@ class SunoDownloader:
             logger.warning("[Pipeline] MP3 ダウンロード失敗 — DEMO にフォールバック: %s", genre)
             return self._create_demo_result(prompt, asset_id)
 
-        return {
-            "asset_id":     asset_id,
-            "suno_clip_id": clip.get("id", ""),
-            "title":        title,
-            "mp3_path":     str(mp3_path),
-            "cover_path":   str(cover_path) if cover_ok else "",
-            "audio_url":    audio_url,
-            "status":       "downloaded",
+        result = {
+            "asset_id":        asset_id,
+            "suno_clip_id":    clip.get("id", ""),
+            "title":           title,
+            "mp3_path":        str(mp3_path),
+            "cover_path":      str(cover_path) if cover_ok else "",
+            "audio_url":       audio_url,
+            "status":          "downloaded",
+            "style_prompt":    prompt.get("style_prompt", ""),
+            "generation_seed": prompt.get("generation_seed", 0),
         }
+        # 証拠台帳に永久保存 (ダウンロード成功時)
+        if self.vault_path:
+            stamped = stamp_entry(result, result["generation_seed"], result["style_prompt"])
+            append_vault(stamped, self.vault_path)
+            logger.info("[Vault] ✓ 証拠台帳に記録: %s  fp=%s",
+                        asset_id, stamped.get("prompt_fingerprint"))
+        return result
