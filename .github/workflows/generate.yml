@@ -1,48 +1,64 @@
-name: Generate Coloring Book
+name: LUXMIA — Generate Coloring Book
 
 on:
   # 手動実行
   workflow_dispatch:
-
-  # 毎日 JST 03:00 = UTC 18:00 に自動実行
+  # 毎日 JST 03:00 = UTC 18:00
   schedule:
     - cron: "0 18 * * *"
+
+# strategy_assets.md をリポジトリに書き戻すために書き込み権限が必要
+permissions:
+  contents: write
 
 jobs:
   generate:
     runs-on: ubuntu-latest
-    timeout-minutes: 45   # multi-agent: 3x Gemini calls + 5x image gen
+    timeout-minutes: 45   # 6エージェント + 5画像生成の余裕を確保
 
     steps:
-      # ── 1. リポジトリのチェックアウト ─────────────────────────────────
+      # ── 1. チェックアウト ────────────────────────────────────────────────
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # ── 2. Python セットアップ ────────────────────────────────────────
+      # ── 2. Python セットアップ ───────────────────────────────────────────
       - name: Set up Python 3.11
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
           cache: pip
 
-      # ── 3. 依存ライブラリのインストール ──────────────────────────────
+      # ── 3. 依存ライブラリ ────────────────────────────────────────────────
       - name: Install dependencies
         run: pip install --upgrade pip && pip install -r requirements.txt
 
-      # ── 4. メインスクリプトの実行 ─────────────────────────────────────
-      # 画像生成は Pollinations AI (無料・APIキー不要) を使用
-      - name: Generate coloring book PDF
+      # ── 4. マルチエージェントシステム実行 ───────────────────────────────
+      # 画像生成: Pollinations AI (無料・APIキー不要)
+      - name: Run LUXMIA multi-agent system
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: python generate_coloring_book.py
 
-      # ── 5. output/ フォルダ全体を Artifacts として保存 ────────────────
-      # 内容: output.pdf (塗り絵本) + kdp_meta.txt (KDP SEOメタデータ)
-      - name: Upload output artifacts
+      # ── 5. strategy_assets.md をリポジトリに書き戻す（知識蓄積）─────────
+      - name: Commit strategy log back to repository
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add logs/strategy_assets.md
+          git diff --staged --quiet \
+            || git commit -m "chore: append strategy log $(date -u +%Y-%m-%d) [skip ci]"
+          git push
+
+      # ── 6. 成果物を Artifacts として保存（30日間）──────────────────────
+      # output/ : output.pdf + kdp_and_sns_meta.txt
+      # logs/   : strategy_assets.md（参照用コピー）
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
-        if: always()   # 部分失敗でも生成済みファイルを保存
+        if: always()
         with:
-          name: coloring-book-run-${{ github.run_number }}
-          path: output/
+          name: luxmia-run-${{ github.run_number }}
+          path: |
+            output/
+            logs/
           retention-days: 30
           if-no-files-found: warn
