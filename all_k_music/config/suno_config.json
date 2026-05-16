@@ -1,0 +1,13 @@
+{
+  "_readme": [
+    "1. ブラウザで https://suno.ai にログインする",
+    "2. DevTools → Application → Cookies → __client の値をコピー",
+    "3. 'cookie' フィールドに '__client=<値>' 形式で貼り付ける",
+    "4. cookie が空のまま実行すると DEMO MODE (プレースホルダー生成) で動作する"
+  ],
+  "cookie": "",
+  "model_version": "chirp-v3-5",
+  "max_retries": 5,
+  "poll_interval_seconds": 8,
+  "poll_timeout_seconds": 360
+}
