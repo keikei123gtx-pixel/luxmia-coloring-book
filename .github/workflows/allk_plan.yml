@@ -1,0 +1,76 @@
+name: All k Music — Phase 0 企画書自動出力
+
+on:
+  # 手動実行 (ジャンル絞り込み可)
+  workflow_dispatch:
+    inputs:
+      genre:
+        description: "ジャンルを絞り込む場合に指定 (未指定で全4ジャンル)"
+        required: false
+        default: ""
+        type: choice
+        options:
+          - ""
+          - lofi
+          - edm
+          - ambient
+          - synthwave
+
+  # 毎日 JST 09:00 = UTC 00:00 に自動実行
+  schedule:
+    - cron: "0 0 * * *"
+
+permissions:
+  contents: write   # 企画書 JSONL をリポジトリに書き戻すために必要
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      # ── 1. チェックアウト ────────────────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ── 2. Python セットアップ ───────────────────────────────────────────
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      # ── 3. 依存ライブラリ (all_k_music のみ) ────────────────────────────
+      - name: Install dependencies
+        run: pip install --upgrade pip && pip install requests
+
+      # ── 4. Phase 0 実行 (企画書生成) ────────────────────────────────────
+      - name: Run Phase 0 — 企画書出力
+        working-directory: all_k_music
+        run: |
+          GENRE_ARG=""
+          if [ -n "${{ github.event.inputs.genre }}" ]; then
+            GENRE_ARG="--genre ${{ github.event.inputs.genre }}"
+          fi
+          python main.py --phase 0 $GENRE_ARG
+
+      # ── 5. 企画書をリポジトリに書き戻す ──────────────────────────────────
+      - name: Commit session plan to repository
+        working-directory: all_k_music
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add logs/plans/
+          git diff --staged --quiet \
+            || git commit -m "chore(plan): session plan $(date -u +%Y-%m-%d) [skip ci]"
+          git push
+
+      # ── 6. 企画書を Artifact として保存 (90日) ──────────────────────────
+      - name: Upload session plan as artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: allk-plan-${{ github.run_number }}
+          path: all_k_music/logs/plans/
+          retention-days: 90
+          if-no-files-found: warn
