@@ -32,6 +32,8 @@ permissions:
 jobs:
   phase2:
     runs-on: ubuntu-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
     timeout-minutes: 60   # DNA 適用 × 4 ジャンル + メドレー生成の余裕
 
     # workflow_run トリガー時: Phase 1 が成功した場合のみ実行

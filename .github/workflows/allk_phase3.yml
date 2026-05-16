@@ -32,6 +32,8 @@ permissions:
 jobs:
   phase3:
     runs-on: ubuntu-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
     timeout-minutes: 90   # 1時間動画エンコード × 4 ジャンル × 2形式 (通常 + Shorts)
 
     # workflow_run トリガー時: Phase 2 が成功した場合のみ実行

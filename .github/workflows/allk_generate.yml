@@ -36,6 +36,8 @@ permissions:
 jobs:
   generate:
     runs-on: ubuntu-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
     timeout-minutes: 40   # ポーリング 360s × 最大リトライ 5 × 4 ジャンル の余裕
 
     steps:
