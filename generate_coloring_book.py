@@ -171,7 +171,7 @@ Hard requirements:
 4. Total prompt length: under 200 words.
 5. Output ONLY the final prompt text. No labels, no quotes, no explanation."""
 
-    logger.info("  [Agent 2 / Prompt Engineer] Expanding: "%s"", theme[:55])
+    logger.info("  [Agent 2 / Prompt Engineer] Expanding: %s", theme[:55])
     try:
         response = retry(
             client.models.generate_content,
