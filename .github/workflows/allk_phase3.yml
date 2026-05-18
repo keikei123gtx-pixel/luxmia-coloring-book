@@ -76,7 +76,7 @@ jobs:
           run-id: ${{ github.event.workflow_run.id }}
           pattern: allk-medley-*
           merge-multiple: true
-          path: all_k_music/assets/
+          path: .
 
       - name: Download Phase 2 medley artifact (workflow_dispatch)
         if: >-
@@ -88,7 +88,7 @@ jobs:
           run-id: ${{ github.event.inputs.source_run_id }}
           pattern: allk-medley-*
           merge-multiple: true
-          path: all_k_music/assets/
+          path: .
 
       # ── 5. ダウンロードされたアセットを確認 ─────────────────────────────
       - name: Inspect assets
