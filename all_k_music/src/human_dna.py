@@ -119,20 +119,18 @@ def apply_dna(
     src: Path,
     genre_slug: str,
     out: Path,
-    noise_duration_pad: int = 200,
 ) -> Optional[Path]:
     """
     src MP3 にジャンル別環境音レイヤー + 残響シグネチャーを重ね、
     波形レベルで完全差別化した out MP3 を生成する。
 
     Args:
-        src:               元メドレー MP3
-        genre_slug:        "lofi" | "edm" | "ambient" | "synthwave"
-        out:               出力先 MP3
-        noise_duration_pad: ノイズソースの余裕秒数 (デフォルト +200s)
+        src:        元メドレー MP3
+        genre_slug: "lofi" | "edm" | "ambient" | "synthwave"
+        out:        出力先 MP3
 
     Returns:
-        生成した MP3 の Path。失敗時は None (src をそのままコピーして返す)。
+        生成した MP3 の Path。失敗時は None。
     """
     if not _check_ffmpeg():
         logger.error("[HumanDNA] ffmpeg が見つかりません。brew install ffmpeg で導入してください。")
@@ -140,18 +138,17 @@ def apply_dna(
 
     dna = GENRE_DNA.get(genre_slug, GENRE_DNA["lofi"])
     src_dur = _probe_duration(src)
-    noise_dur = int(src_dur) + noise_duration_pad
 
     # フェードアウト開始位置: 末尾 tail_fade_sec 秒前
     fade_start = max(0.0, src_dur - dna["tail_fade_sec"])
 
     # ── filter_complex 構築 ──────────────────────────────────────────────
     # [0] = メイン音声
-    # [1] = 環境音レイヤー Hi
+    # [1] = 環境音レイヤー Hi  (anoisesrc は無限生成源 → amix が主音源終端で自動停止)
     # [2] = 環境音レイヤー Lo
     #
     # Step 1: ノイズ音量調整
-    # Step 2: 3ストリームを amix (normalize=0 で相対音量を維持)
+    # Step 2: 3ストリームを amix (normalize=0 で相対音量を維持、duration=first で主音源終端に合わせる)
     # Step 3: 残響シグネチャー (aecho)
     # Step 4: 末尾フェードアウト
     filter_complex = (
@@ -167,10 +164,10 @@ def apply_dna(
         "ffmpeg", "-y",
         # メイン入力
         "-i", str(src),
-        # 環境音レイヤー Hi (lavfi で直接生成)
-        "-f", "lavfi", "-i", f"{dna['layer_hi']}:duration={noise_dur}",
+        # 環境音レイヤー Hi (lavfi 無限音源 → duration 指定不要)
+        "-f", "lavfi", "-i", dna["layer_hi"],
         # 環境音レイヤー Lo
-        "-f", "lavfi", "-i", f"{dna['layer_lo']}:duration={noise_dur}",
+        "-f", "lavfi", "-i", dna["layer_lo"],
         # フィルターグラフ
         "-filter_complex", filter_complex,
         "-map", "[out]",
