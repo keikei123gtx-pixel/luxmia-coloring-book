@@ -1,0 +1,97 @@
+═════════════════════════════════════════════════════════════════
+  All k Music — 企画・プロンプト出力モード
+  生成日時: 2026-05-19 15:08:57
+═════════════════════════════════════════════════════════════════
+
+【商用安全チェック結果】
+  ✓ make_instrumental = True  (全ジャンル強制)
+  ✓ continue_clip_id  = None  (他者楽曲継続禁止)
+  ✓ is_remix          = False (リミックス禁止)
+  ✓ is_extend         = False (拡張生成禁止)
+  ✓ アーティスト名・著作権IPをタグから排除済み
+
+═════════════════════════════════════════════════════════════════
+  [1/4] Lo-fi Hip Hop  |  BPM 90  |  Seed 480699020
+═════════════════════════════════════════════════════════════════
+
+【Suno AI へのコピペ用スタイルプロンプト】
+  city rain background noise, vinyl crackle texture, nostalgic dusty piano, jazzy chord progressions
+
+【ネガティブプロンプト】
+  vocals, lyrics, singing, bright synths, club music, fast tempo
+
+【Human DNA レシピ (Phase 2 で自動適用)】
+  LayerHi  : anoisesrc=color=pink:amplitude=0.018,highpass=f=3000,lo
+  LayerLo  : anoisesrc=color=brown:amplitude=0.014,lowpass=f=120
+  Echo-sig : aecho=0.45:0.35:500:0.18
+  Vol      : Hi=0.040 (-28.0dB)  Lo=0.032 (-29.9dB)
+  FadeTail : 4.0s
+
+  フィンガープリント対象: SHA-256(city rain background noise, vi... | 480699020)
+
+═════════════════════════════════════════════════════════════════
+  [2/4] EDM Glitch Hop  |  BPM 140  |  Seed 3170531509
+═════════════════════════════════════════════════════════════════
+
+【Suno AI へのコピペ用スタイルプロンプト】
+  energetic crowd pleaser, uplifting melodic instrumental EDM, melodic dubstep, epic synth breakdown
+
+【ネガティブプロンプト】
+  slow tempo, acoustic instruments only, folk, jazz, ambient
+
+【Human DNA レシピ (Phase 2 で自動適用)】
+  LayerHi  : anoisesrc=color=white:amplitude=0.010,highpass=f=9000
+  LayerLo  : anoisesrc=color=pink:amplitude=0.008,highpass=f=50,lowp
+  Echo-sig : aecho=0.60:0.45:180:0.22
+  Vol      : Hi=0.030 (-30.5dB)  Lo=0.025 (-32.0dB)
+  FadeTail : 2.0s
+
+  フィンガープリント対象: SHA-256(energetic crowd pleaser, uplif... | 3170531509)
+
+═════════════════════════════════════════════════════════════════
+  [3/4] Ambient Healing  |  BPM 60  |  Seed 132039944
+═════════════════════════════════════════════════════════════════
+
+【Suno AI へのコピペ用スタイルプロンプト】
+  chakra balancing tones, healing ambient 528Hz frequency, spa relaxation music, theta wave binaural beats
+
+【ネガティブプロンプト】
+  drums, percussion, beat, fast, energetic, vocals, distortion
+
+【Human DNA レシピ (Phase 2 で自動適用)】
+  LayerHi  : anoisesrc=color=brown:amplitude=0.022,highpass=f=80,low
+  LayerLo  : anoisesrc=color=pink:amplitude=0.012,highpass=f=600,low
+  Echo-sig : aecho=0.80:0.70:1200:0.40
+  Vol      : Hi=0.045 (-26.9dB)  Lo=0.030 (-30.5dB)
+  FadeTail : 8.0s
+
+  フィンガープリント対象: SHA-256(chakra balancing tones, healin... | 132039944)
+
+═════════════════════════════════════════════════════════════════
+  [4/4] Synthwave Retro  |  BPM 118  |  Seed 1995799813
+═════════════════════════════════════════════════════════════════
+
+【Suno AI へのコピペ用スタイルプロンプト】
+  dark cinematic retro electronic score, pulsing bassline arpeggio, vaporwave nostalgia, analog polysynth chords
+
+【ネガティブプロンプト】
+  acoustic only, folk, jazz, organic instruments, country
+
+【Human DNA レシピ (Phase 2 で自動適用)】
+  LayerHi  : anoisesrc=color=white:amplitude=0.012,highpass=f=7000
+  LayerLo  : anoisesrc=color=pink:amplitude=0.009,highpass=f=55,lowp
+  Echo-sig : aecho=0.55:0.50:150:0.30
+  Vol      : Hi=0.035 (-29.1dB)  Lo=0.028 (-31.1dB)
+  FadeTail : 3.0s
+
+  フィンガープリント対象: SHA-256(dark cinematic retro electroni... | 1995799813)
+
+═════════════════════════════════════════════════════════════════
+  ★ 上記プロンプトを Suno AI に手動入力する場合:
+    1. suno.ai にログイン → Create
+    2. Style of Music にスタイルプロンプトを貼り付け
+    3. 「Instrumental」にチェック (必須)
+    4. generate → ダウンロード → assets/tracks/ に配置
+
+  ★ 自動生成する場合: python main.py --phase 1
+═════════════════════════════════════════════════════════════════
