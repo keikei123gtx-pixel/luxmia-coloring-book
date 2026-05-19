@@ -24,6 +24,15 @@ on:
           - edm
           - ambient
           - synthwave
+      style:
+        description: "動画スタイル"
+        required: false
+        default: "default"
+        type: choice
+        options:
+          - default
+          - ncs
+          - lofi_girl
 
 # music_assets.json + thumbnails をリポジトリに書き戻すために必要
 permissions:
@@ -62,6 +71,13 @@ jobs:
 
       - name: Install Python dependencies
         run: pip install --upgrade pip && pip install requests Pillow
+
+      # ── 3b. フォントインストール (NCS / LoFi Girl スタイルのテキスト描画に必要) ──
+      - name: Install fonts
+        run: |
+          sudo apt-get install -y fonts-dejavu-core fonts-liberation
+          fc-cache -f
+          echo "DejaVu: $(fc-list | grep -i dejavusans | head -1)"
 
       # ── 4. Phase 1 Artifact から MP3 をダウンロード ──────────────────────
       #   workflow_run: Phase 1 の当該 run から自動取得
@@ -140,7 +156,12 @@ jobs:
           if [ -n "${{ github.event.inputs.genre }}" ]; then
             GENRE_ARG="--genre ${{ github.event.inputs.genre }}"
           fi
-          python main.py --phase 2 $GENRE_ARG
+          STYLE="${{ github.event.inputs.style }}"
+          STYLE_ARG=""
+          if [ -n "$STYLE" ] && [ "$STYLE" != "default" ]; then
+            STYLE_ARG="--style $STYLE"
+          fi
+          python main.py --phase 2 $GENRE_ARG $STYLE_ARG
 
       # ── 7. サムネイル + ログをリポジトリに書き戻す ──────────────────────
       #   サムネイル (JPG ~350KB × 4) はリポジトリに保存
@@ -167,5 +188,6 @@ jobs:
             all_k_music/assets/medley/
             all_k_music/assets/thumbnails/
             all_k_music/logs/music_assets.json
+          # thumbnails/ には LoFi Girl 背景 PNG (_bg.png) も含まれる
           retention-days: 30
           if-no-files-found: warn

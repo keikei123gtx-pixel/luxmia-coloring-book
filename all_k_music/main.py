@@ -254,10 +254,10 @@ def run_phase1(genre_filter: Optional[str] = None) -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 # Phase 2: メドレー + Human DNA + サムネイル
 # ─────────────────────────────────────────────────────────────────────────────
-def run_phase2(genre_filter: Optional[str] = None) -> None:
+def run_phase2(genre_filter: Optional[str] = None, style: str = "default") -> None:
     from src.medley_builder import build_medley  # noqa: PLC0415
     from src.human_dna import apply_dna          # noqa: PLC0415
-    from src.thumbnail_maker import make_thumbnail  # noqa: PLC0415
+    from src.thumbnail_maker import make_thumbnail, make_lofi_girl_bg  # noqa: PLC0415
 
     logger.info("════════════════════════════════════════════════════════════")
     logger.info("  Phase 2 — 神繋ぎメドレー + Human DNA トッピング + サムネイル")
@@ -325,11 +325,20 @@ def run_phase2(genre_filter: Optional[str] = None) -> None:
 
         # ── Step 3: サムネイル生成 ──────────────────────────────────────
         thumb_path = THUMB_DIR / f"{stem}.jpg"
-        thumb = make_thumbnail(slug, stem, thumb_path)
+        thumb = make_thumbnail(slug, stem, thumb_path, style=style)
         if thumb:
             logger.info("[Phase2] ✓ サムネイル: %s", thumb.name)
         else:
             logger.warning("[Phase2] %s サムネイル生成失敗", slug)
+
+        # ── Step 4: LoFi Girl 動画背景生成 (lofi_girl スタイル時のみ) ──
+        if style == "lofi_girl":
+            bg_path = THUMB_DIR / f"{stem}_bg.png"
+            bg = make_lofi_girl_bg(slug, bg_path)
+            if bg:
+                logger.info("[Phase2] ✓ LoFi 背景: %s", bg.name)
+            else:
+                logger.warning("[Phase2] %s LoFi 背景生成失敗", slug)
 
         # ── ログ更新 ────────────────────────────────────────────────────
         for entry in asset_log:
@@ -341,11 +350,13 @@ def run_phase2(genre_filter: Optional[str] = None) -> None:
                 break
         save_asset_log(asset_log)
 
+    logger.info("[Phase2] ✓ 完了 (style=%s)", style)
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Phase 3: 動画エンコード + SEO
 # ─────────────────────────────────────────────────────────────────────────────
-def run_phase3(genre_filter: Optional[str] = None) -> None:
+def run_phase3(genre_filter: Optional[str] = None, style: str = "default") -> None:
     from src.video_encoder import encode_all          # noqa: PLC0415
     from src.seo_writer import generate_seo_package, save_seo_txt  # noqa: PLC0415
     from src.thumbnail_maker import make_thumbnail    # noqa: PLC0415
@@ -366,7 +377,7 @@ def run_phase3(genre_filter: Optional[str] = None) -> None:
                          if s in medley_mp3.name), None)
             if not slug or (genre_filter and slug != genre_filter):
                 continue
-            _encode_for_slug(slug, medley_mp3, asset_log)
+            _encode_for_slug(slug, medley_mp3, asset_log, style=style)
         save_asset_log(asset_log)
         return
 
@@ -384,7 +395,7 @@ def run_phase3(genre_filter: Optional[str] = None) -> None:
         if not medley_path:
             logger.warning("[Phase3] %s: メドレー MP3 見つからず — スキップ", slug)
             continue
-        _encode_for_slug(slug, medley_path, asset_log, entry)
+        _encode_for_slug(slug, medley_path, asset_log, entry, style=style)
 
     save_asset_log(asset_log)
 
@@ -394,12 +405,13 @@ def _encode_for_slug(
     medley_path: Path,
     asset_log: list,
     entry: Optional[dict] = None,
+    style: str = "default",
 ) -> None:
     from src.video_encoder import encode_all          # noqa: PLC0415
     from src.seo_writer import generate_seo_package, save_seo_txt  # noqa: PLC0415
     from src.thumbnail_maker import make_thumbnail    # noqa: PLC0415
 
-    logger.info("\n── Phase3: %s  |  %s", slug, medley_path.name)
+    logger.info("\n── Phase3: %s  |  %s  |  style=%s", slug, medley_path.name, style)
 
     cover = entry.get("cover_path", "") if entry else ""
     thumb_path = Path(cover) if cover and Path(cover).exists() else None
@@ -409,10 +421,28 @@ def _encode_for_slug(
     if not thumb_path:
         stem = medley_path.stem
         thumb_path = THUMB_DIR / f"{stem}.jpg"
-        make_thumbnail(slug, stem, thumb_path)
+        make_thumbnail(slug, stem, thumb_path, style=style)
 
-    stem   = medley_path.stem
-    result = encode_all(thumb_path, medley_path, VIDEO_DIR, stem)
+    stem = medley_path.stem
+
+    # LoFi Girl スタイルの場合: 動画背景 PNG を探す
+    bg_image = None
+    if style == "lofi_girl":
+        bgs = [p for p in sorted(THUMB_DIR.glob(f"*{slug}*_bg.png"), reverse=True)]
+        if bgs:
+            bg_image = bgs[0]
+        else:
+            # フォールバック: その場で生成
+            from src.thumbnail_maker import make_lofi_girl_bg  # noqa: PLC0415
+            bg_image = THUMB_DIR / f"{stem}_bg.png"
+            make_lofi_girl_bg(slug, bg_image)
+            if not bg_image.exists():
+                bg_image = None
+
+    result = encode_all(
+        thumb_path, medley_path, VIDEO_DIR, stem,
+        style=style, bg_image=bg_image, genre_slug=slug,
+    )
     long_mp4   = result.get("long")
     shorts_mp4 = result.get("shorts")
 
@@ -460,6 +490,17 @@ def _parse_args() -> argparse.Namespace:
         default=None,
         help="特定ジャンルのみ実行 (未指定で全4ジャンル)",
     )
+    parser.add_argument(
+        "--style",
+        choices=["default", "ncs", "lofi_girl"],
+        default="default",
+        help=(
+            "動画スタイル:\n"
+            "  default   = グラデーション背景 (従来スタイル)\n"
+            "  ncs       = 黒背景 + EQ スペクトラムバー (NCS 風)\n"
+            "  lofi_girl = 夜の部屋イラスト + 窓 (LoFi Girl 風)"
+        ),
+    )
     return parser.parse_args()
 
 
@@ -467,12 +508,13 @@ if __name__ == "__main__":
     args  = _parse_args()
     phase = args.phase
     genre = args.genre
+    style = args.style
 
     if phase != "0":
         logger.info("╔═══════════════════════════════════════════════════════════╗")
         logger.info("║  All k Music — YouTube BGM 完全自動化パイプライン")
-        logger.info("║  %s  Phase=%s  Genre=%s",
-                    datetime.now().strftime("%Y-%m-%d %H:%M:%S"), phase, genre or "all")
+        logger.info("║  %s  Phase=%s  Genre=%s  Style=%s",
+                    datetime.now().strftime("%Y-%m-%d %H:%M:%S"), phase, genre or "all", style)
         logger.info("╚═══════════════════════════════════════════════════════════╝")
 
     if phase in ("0",):
@@ -482,10 +524,10 @@ if __name__ == "__main__":
         run_phase1(genre_filter=genre)
 
     if phase in ("2", "all"):
-        run_phase2(genre_filter=genre)
+        run_phase2(genre_filter=genre, style=style)
 
     if phase in ("3", "all"):
-        run_phase3(genre_filter=genre)
+        run_phase3(genre_filter=genre, style=style)
 
     if phase not in ("0",):
         logger.info("\n✓ All k Music パイプライン完了")
