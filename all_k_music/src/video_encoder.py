@@ -181,7 +181,9 @@ def encode_ncs_long(
 
     # showcqt 1920×380 を y=700 に配置 (上部 700px がテキスト領域)
     fc = (
-        f"[0:a]showcqt=s=1920x380:count=1:bar_g=4:bar_v=9:"
+        # asplit でオーディオを複製: [a_spec]→showcqt, [a_out]→音声出力
+        f"[0:a]asplit=2[a_spec][a_out];"
+        f"[a_spec]showcqt=s=1920x380:count=1:bar_g=4:bar_v=9:"
         f"volume=0.7:tc=0.33:gamma=7:gamma2=2:"
         f"fontcolor=white@0:sono_v=0:bar_t=0.5:"
         f"cscheme={g['cscheme']}[spec];"
@@ -207,7 +209,7 @@ def encode_ncs_long(
         "-i", str(audio),
         "-f", "lavfi", "-i", f"color=c={g['bg']}:s=1920x1080:r=10",
         "-filter_complex", fc,
-        "-map", "[final]", "-map", "0:a",
+        "-map", "[final]", "-map", "[a_out]",
         "-c:v", "libx264", "-preset", "ultrafast", "-crf", "32",
         "-r", "10", "-pix_fmt", "yuv420p",
         "-c:a", "aac", "-b:a", "192k",
@@ -240,7 +242,8 @@ def encode_ncs_shorts(
 
     # 1080×1920: スペクトラム 1080×500 を y=1420 に配置
     fc = (
-        f"[0:a]showcqt=s=1080x500:count=1:bar_g=4:bar_v=9:"
+        f"[0:a]asplit=2[a_spec][a_out];"
+        f"[a_spec]showcqt=s=1080x500:count=1:bar_g=4:bar_v=9:"
         f"volume=0.7:tc=0.33:gamma=7:gamma2=2:"
         f"fontcolor=white@0:sono_v=0:bar_t=0.5:"
         f"cscheme={g['cscheme']}[spec];"
@@ -264,7 +267,7 @@ def encode_ncs_shorts(
         "-i", str(audio),
         "-f", "lavfi", "-i", f"color=c={g['bg']}:s=1080x1920:r=10",
         "-filter_complex", fc,
-        "-map", "[final]", "-map", "0:a",
+        "-map", "[final]", "-map", "[a_out]",
         "-c:v", "libx264", "-preset", "ultrafast", "-crf", "32",
         "-r", "10", "-pix_fmt", "yuv420p",
         "-c:a", "aac", "-b:a", "192k",
@@ -305,8 +308,10 @@ def encode_lofi_girl_long(
 
     fc = (
         f"[1:v]scale=1920:1080[bg];"
+        # asplit でオーディオを複製: [a_wave]→showwaves, [a_out]→音声出力
+        f"[0:a]asplit=2[a_wave][a_out];"
         # 音楽波形 (底部 90px)
-        f"[0:a]showwaves=s=1920x90:mode=cline:"
+        f"[a_wave]showwaves=s=1920x90:mode=cline:"
         f"colors=0x{wc}@0.85:rate=30[wave];"
         f"[bg][wave]overlay=0:H-h-5[ww];"
         # 雨ノイズ (temporal noise)
@@ -328,7 +333,7 @@ def encode_lofi_girl_long(
         "-i", str(audio),
         "-loop", "1", "-i", str(bg_image),
         "-filter_complex", fc,
-        "-map", "[final]", "-map", "0:a",
+        "-map", "[final]", "-map", "[a_out]",
         "-c:v", "libx264", "-tune", "stillimage",
         "-preset", "veryfast", "-crf", "26",
         "-pix_fmt", "yuv420p",
@@ -362,7 +367,8 @@ def encode_lofi_girl_shorts(
     # 1920×1080 → 中央 607px 幅を切り抜き → 1080×1920 縦型
     fc = (
         f"[1:v]scale=1920:1080,crop=607:1080:656:0,scale=1080:1920[bg];"
-        f"[0:a]showwaves=s=1080x90:mode=cline:"
+        f"[0:a]asplit=2[a_wave][a_out];"
+        f"[a_wave]showwaves=s=1080x90:mode=cline:"
         f"colors=0x{wc}@0.85:rate=30[wave];"
         f"[bg][wave]overlay=0:H-h-5[ww];"
         f"[ww]noise=alls=18:allf=a+t[rain];"
@@ -380,7 +386,7 @@ def encode_lofi_girl_shorts(
         "-i", str(audio),
         "-loop", "1", "-i", str(bg_image),
         "-filter_complex", fc,
-        "-map", "[final]", "-map", "0:a",
+        "-map", "[final]", "-map", "[a_out]",
         "-c:v", "libx264", "-tune", "stillimage",
         "-preset", "veryfast", "-crf", "26",
         "-pix_fmt", "yuv420p",
