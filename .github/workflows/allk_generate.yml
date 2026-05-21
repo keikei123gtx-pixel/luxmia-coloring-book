@@ -66,6 +66,20 @@ jobs:
           fi
           python main.py --phase 0 $GENRE_ARG
 
+      # ── 4b. SUNO_COOKIE の事前チェック ──────────────────────────────────
+      - name: Check SUNO_COOKIE
+        env:
+          SUNO_COOKIE: ${{ github.event.inputs.dry_run == 'true' && '' || secrets.SUNO_COOKIE }}
+        run: |
+          if [ -z "$SUNO_COOKIE" ]; then
+            echo "::warning::SUNO_COOKIE が未設定です → DEMO MODE で実行します (実際の楽曲は生成されません)"
+            echo "  登録方法: GitHub リポジトリ → Settings → Secrets and variables → Actions → New repository secret"
+            echo "  Cookie 取得: suno.com にログイン → DevTools (F12) → Application → Cookies → __client の値をコピー"
+          else
+            COOKIE_LEN=${#SUNO_COOKIE}
+            echo "::notice::SUNO_COOKIE 確認済み (長さ: ${COOKIE_LEN}文字) → LIVE MODE で実行します"
+          fi
+
       # ── 5. Phase 1 — Suno AI 楽曲生成 ──────────────────────────────────
       #   SUNO_COOKIE: GitHub Secret → SunoConfig.cookie プロパティが env 優先で読む
       #   dry_run=true または Secret 未設定時は自動的に DEMO MODE にフォールバック
