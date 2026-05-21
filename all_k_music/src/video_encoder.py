@@ -181,7 +181,7 @@ def encode_ncs_long(
 
     # showcqt 1920×380 を y=700 に配置 (上部 700px がテキスト領域)
     fc = (
-        f"[0:a]showcqt=s=1920x380:count=1:bar_g=8:bar_v=9:"
+        f"[0:a]showcqt=s=1920x380:count=1:bar_g=4:bar_v=9:"
         f"volume=0.7:tc=0.33:gamma=7:gamma2=2:"
         f"fontcolor=white@0:sono_v=0:bar_t=0.5:"
         f"cscheme={g['cscheme']}[spec];"
@@ -240,7 +240,7 @@ def encode_ncs_shorts(
 
     # 1080×1920: スペクトラム 1080×500 を y=1420 に配置
     fc = (
-        f"[0:a]showcqt=s=1080x500:count=1:bar_g=8:bar_v=9:"
+        f"[0:a]showcqt=s=1080x500:count=1:bar_g=4:bar_v=9:"
         f"volume=0.7:tc=0.33:gamma=7:gamma2=2:"
         f"fontcolor=white@0:sono_v=0:bar_t=0.5:"
         f"cscheme={g['cscheme']}[spec];"
