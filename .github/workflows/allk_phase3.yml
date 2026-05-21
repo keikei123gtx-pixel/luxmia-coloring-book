@@ -126,6 +126,19 @@ jobs:
               print('  (ファイルなし)')
           "
 
+      # ── 5b. style を解決 (workflow_run 時は Phase 2 artifact から取得) ───
+      - name: Resolve style
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_run" ] && [ -f all_k_music/.current_style ]; then
+            STYLE=$(cat all_k_music/.current_style | tr -d '[:space:]')
+            echo "Phase 2 artifact から style を取得: $STYLE"
+          else
+            STYLE="${{ github.event.inputs.style }}"
+            STYLE="${STYLE:-default}"
+            echo "手動入力の style を使用: $STYLE"
+          fi
+          echo "PHASE3_STYLE=$STYLE" >> $GITHUB_ENV
+
       # ── 6. Phase 3 実行 (動画エンコード + SEO 生成) ──────────────────────
       - name: Phase 3 — 動画エンコード + SEO
         working-directory: all_k_music
@@ -137,11 +150,12 @@ jobs:
             GENRE_ARG="--genre ${{ github.event.inputs.genre }}"
           fi
 
-          STYLE="${{ github.event.inputs.style }}"
+          STYLE="${PHASE3_STYLE:-default}"
           STYLE_ARG=""
           if [ -n "$STYLE" ] && [ "$STYLE" != "default" ]; then
             STYLE_ARG="--style $STYLE"
           fi
+          echo "::notice::使用スタイル: $STYLE"
 
           if [ -n "$GEMINI_API_KEY" ]; then
             echo "::notice::GEMINI_API_KEY 確認済み → SEO を Gemini で強化します"

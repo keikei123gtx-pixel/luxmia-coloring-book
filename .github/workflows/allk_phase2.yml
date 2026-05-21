@@ -163,6 +163,13 @@ jobs:
           fi
           python main.py --phase 2 $GENRE_ARG $STYLE_ARG
 
+      # ── 6b. Phase 3 に引き渡す style を保存 ────────────────────────────
+      - name: Save style config for Phase 3
+        run: |
+          STYLE="${{ github.event.inputs.style }}"
+          echo "${STYLE:-default}" > all_k_music/.current_style
+          echo "Phase 3 に渡す style: ${STYLE:-default}"
+
       # ── 7. サムネイル + ログをリポジトリに書き戻す ──────────────────────
       #   サムネイル (JPG ~350KB × 4) はリポジトリに保存
       #   メドレー MP3 (大容量) は Artifact のみ
@@ -188,6 +195,7 @@ jobs:
             all_k_music/assets/medley/
             all_k_music/assets/thumbnails/
             all_k_music/logs/music_assets.json
+            all_k_music/.current_style
           # thumbnails/ には LoFi Girl 背景 PNG (_bg.png) も含まれる
           retention-days: 30
           if-no-files-found: warn
