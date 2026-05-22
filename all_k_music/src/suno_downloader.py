@@ -4,12 +4,10 @@ Suno Downloader — All k Music
 Suno AI 非公式セッション API を使った楽曲生成・ポーリング・ダウンロード。
 
 認証フロー:
-  ① config/suno_config.json の __client Cookie → Clerk JWT 取得
-  ② JWT を Bearer トークンとして Suno Studio API を呼び出す
-  ③ 生成完了後に MP3 + ジャケット画像をローカルに保存
-
-Cookie 未設定 / API エラー時は DEMO MODE にフォールバックし、
-プレースホルダーファイルを生成してシステムをクラッシュさせない。
+  ① SUNO_COOKIE 環境変数 (GitHub Secrets) の __client Cookie
+  ② clerk.suno.com / clerk.suno.ai に POST → Clerk JWT 取得
+  ③ JWT を Bearer トークンとして studio-api.suno.ai を呼び出す
+  ④ 生成完了後に MP3 + ジャケット画像をローカルに保存
 """
 
 from __future__ import annotations
@@ -31,8 +29,12 @@ from src.asset_vault import stamp_entry, append_vault
 logger = logging.getLogger(__name__)
 
 # ── API エンドポイント ─────────────────────────────────────────────────────
-CLERK_BASE = "https://clerk.suno.ai"
-SUNO_BASE  = "https://studio-api.suno.ai"
+# Suno は suno.com に移行済み。clerk.suno.com を優先し、失敗時に .ai へフォールバック
+_CLERK_CANDIDATES = [
+    "https://clerk.suno.com",
+    "https://clerk.suno.ai",
+]
+SUNO_BASE = "https://studio-api.suno.ai"
 
 # Suno が受け付けるステータス値
 _STATUS_COMPLETE = "complete"
@@ -180,42 +182,56 @@ class SunoDownloader:
     # ── 認証 ────────────────────────────────────────────────────────────
 
     def _refresh_jwt(self) -> bool:
-        """Clerk から JWT を取得して session ヘッダーにセットする。"""
+        """Clerk から JWT を取得して session ヘッダーにセットする。
+        clerk.suno.com → clerk.suno.ai の順で試みる。
+        """
         try:
             session_id = _extract_session_id(self.cfg.cookie)
         except ValueError as exc:
             logger.error("[Auth] %s", exc)
             return False
 
-        url = f"{CLERK_BASE}/v1/client/sessions/{session_id}/tokens"
-        try:
-            resp = self._session.post(
-                url,
-                headers={"Cookie": self.cfg.cookie},
-                timeout=20,
-            )
-            if resp.status_code in (401, 403):
-                logger.error(
-                    "[Auth] Cookie が無効または期限切れです (HTTP %d)。\n"
-                    "  → suno.com にログインし直して __client Cookie を再取得し、\n"
-                    "    GitHub Secrets の SUNO_COOKIE を更新してください。",
-                    resp.status_code,
+        for clerk_base in _CLERK_CANDIDATES:
+            url = f"{clerk_base}/v1/client/sessions/{session_id}/tokens"
+            logger.info("[Auth] Clerk に接続中: %s", clerk_base)
+            try:
+                resp = self._session.post(
+                    url,
+                    headers={"Cookie": self.cfg.cookie},
+                    timeout=20,
                 )
-                return False
-            resp.raise_for_status()
-            self._jwt = resp.json().get("jwt", "")
-            if not self._jwt:
-                logger.error("[Auth] Clerk から空の JWT が返りました。Cookie が古い可能性があります。")
-                return False
-            self._session.headers["Authorization"] = f"Bearer {self._jwt}"
-            logger.info("[Auth] JWT を更新しました (session=%s…)", session_id[:8])
-            return True
-        except requests.exceptions.ConnectionError:
-            logger.error("[Auth] Clerk への接続失敗。ネットワーク・DNS を確認してください。")
-            return False
-        except Exception as exc:
-            logger.error("[Auth] JWT 取得失敗: %s", exc)
-            return False
+                logger.debug("[Auth] HTTP %d  body=%s", resp.status_code, resp.text[:300])
+
+                if resp.status_code in (401, 403):
+                    logger.error(
+                        "[Auth] Cookie が無効または期限切れです (HTTP %d from %s)。\n"
+                        "  → suno.com にログインし直して __client Cookie を再取得し、\n"
+                        "    GitHub Secrets の SUNO_COOKIE を更新してください。\n"
+                        "  response: %s",
+                        resp.status_code, clerk_base, resp.text[:200],
+                    )
+                    return False
+
+                if not resp.ok:
+                    logger.warning("[Auth] %s → HTTP %d — 次のドメインを試します", clerk_base, resp.status_code)
+                    continue
+
+                self._jwt = resp.json().get("jwt", "")
+                if not self._jwt:
+                    logger.warning("[Auth] JWT が空 (%s) — 次のドメインを試します", clerk_base)
+                    continue
+
+                self._session.headers["Authorization"] = f"Bearer {self._jwt}"
+                logger.info("[Auth] ✓ JWT 取得成功 (clerk=%s  session=%s…)", clerk_base, session_id[:8])
+                return True
+
+            except requests.exceptions.ConnectionError:
+                logger.warning("[Auth] %s への接続失敗 — 次のドメインを試します", clerk_base)
+            except Exception as exc:
+                logger.warning("[Auth] %s エラー: %s", clerk_base, exc)
+
+        logger.error("[Auth] 全 Clerk ドメインで認証失敗。Cookie を確認してください。")
+        return False
 
     def _auth_with_retry(self) -> bool:
         for attempt in range(self.cfg.max_retries):
@@ -233,53 +249,75 @@ class SunoDownloader:
         """
         Suno v2 API に生成リクエストを送信し、clip ID リストを返す。
         """
-        # 安全ロック: continue_clip_id / remix 系は絶対に None/False で送信
+        # 最新 Suno v2 API ペイロード (不要フィールドも明示的に null 送信)
         payload = {
-            "prompt":            "",
-            "generation_type":   "TEXT",
-            "tags":              prompt["style_prompt"],
-            "negative_tags":     prompt.get("negative_prompt", ""),
-            "mv":                self.cfg.model_version,
-            "title":             f"{prompt['genre_name']} — All k Music",
-            "make_instrumental": True,   # 常に True (ボーカル入り生成禁止)
-            "continue_clip_id":  None,   # 常に None (他者楽曲への継続禁止)
-            "continue_at":       None,
+            "gpt_description_prompt": None,
+            "mv":                     self.cfg.model_version,
+            "prompt":                 "",
+            "generation_type":        "TEXT",
+            "tags":                   prompt["style_prompt"],
+            "negative_tags":          prompt.get("negative_prompt", ""),
+            "title":                  f"{prompt['genre_name']} — All k Music",
+            "make_instrumental":      True,
+            "infill_start_s":         None,
+            "infill_end_s":           None,
+            "continue_clip_id":       None,
+            "continue_at":            None,
+            "task":                   None,
+            "clip_id":                None,
         }
-        try:
-            resp = self._session.post(
+        logger.info("[Generate] ペイロード: mv=%s  tags=%s", payload["mv"], payload["tags"][:60])
+
+        def _do_post() -> requests.Response:
+            return self._session.post(
                 f"{SUNO_BASE}/api/generate/v2/",
                 json=payload,
                 timeout=30,
             )
+
+        try:
+            resp = _do_post()
+            logger.debug("[Generate] HTTP %d  body=%s", resp.status_code, resp.text[:400])
+
             if resp.status_code == 401:
                 logger.warning("[Generate] 401 — JWT 期限切れ。再認証を試みます。")
                 if self._refresh_jwt():
-                    resp = self._session.post(
-                        f"{SUNO_BASE}/api/generate/v2/",
-                        json=payload,
-                        timeout=30,
-                    )
+                    resp = _do_post()
                 else:
                     return []
+
             if resp.status_code == 429:
                 retry_after = int(resp.headers.get("Retry-After", 60))
                 logger.warning("[Generate] 429 レートリミット — %d 秒待機します", retry_after)
                 time.sleep(retry_after)
                 return []
+
             if resp.status_code == 402:
                 logger.error(
                     "[Generate] 402 — Suno のクレジットが不足しています。\n"
-                    "  → suno.com でプランを確認してください。"
+                    "  → suno.com でプランを確認してください。\n"
+                    "  response: %s", resp.text[:200]
                 )
                 return []
-            resp.raise_for_status()
+
+            if not resp.ok:
+                logger.error(
+                    "[Generate] HTTP %d エラー\n  response: %s",
+                    resp.status_code, resp.text[:400]
+                )
+                return []
+
             data  = resp.json()
             clips = data.get("clips", [])
             ids   = [c["id"] for c in clips if "id" in c]
-            logger.info("[Generate] 送信完了 — clip IDs: %s", ids)
+            if not ids:
+                logger.error("[Generate] clip ID が取得できませんでした。response: %s", str(data)[:400])
+                return []
+            logger.info("[Generate] ✓ 生成リクエスト送信完了 — clip IDs: %s", ids)
             return ids
+
         except requests.exceptions.ConnectionError:
-            logger.error("[Generate] Suno API への接続失敗。")
+            logger.error("[Generate] studio-api.suno.ai への接続失敗。")
             return []
         except Exception as exc:
             logger.error("[Generate] リクエスト失敗: %s", exc)
