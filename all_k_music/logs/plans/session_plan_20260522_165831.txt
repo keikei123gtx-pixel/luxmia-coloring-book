@@ -1,0 +1,40 @@
+═════════════════════════════════════════════════════════════════
+  All k Music — 企画・プロンプト出力モード
+  生成日時: 2026-05-22 16:58:31
+═════════════════════════════════════════════════════════════════
+
+【商用安全チェック結果】
+  ✓ make_instrumental = True  (全ジャンル強制)
+  ✓ continue_clip_id  = None  (他者楽曲継続禁止)
+  ✓ is_remix          = False (リミックス禁止)
+  ✓ is_extend         = False (拡張生成禁止)
+  ✓ アーティスト名・著作権IPをタグから排除済み
+
+═════════════════════════════════════════════════════════════════
+  [1/1] Lo-fi Hip Hop  |  BPM 90  |  Seed 482527702
+═════════════════════════════════════════════════════════════════
+
+【Suno AI へのコピペ用スタイルプロンプト】
+  nostalgic dusty piano, chill lofi beats, vintage sample chop, vinyl crackle texture
+
+【ネガティブプロンプト】
+  vocals, lyrics, singing, bright synths, club music, fast tempo
+
+【Human DNA レシピ (Phase 2 で自動適用)】
+  LayerHi  : anoisesrc=color=pink:amplitude=0.018,highpass=f=3000,lo
+  LayerLo  : anoisesrc=color=brown:amplitude=0.014,lowpass=f=120
+  Echo-sig : aecho=0.45:0.35:500:0.18
+  Vol      : Hi=0.040 (-28.0dB)  Lo=0.032 (-29.9dB)
+  FadeTail : 4.0s
+
+  フィンガープリント対象: SHA-256(nostalgic dusty piano, chill l... | 482527702)
+
+═════════════════════════════════════════════════════════════════
+  ★ 上記プロンプトを Suno AI に手動入力する場合:
+    1. suno.ai にログイン → Create
+    2. Style of Music にスタイルプロンプトを貼り付け
+    3. 「Instrumental」にチェック (必須)
+    4. generate → ダウンロード → assets/tracks/ に配置
+
+  ★ 自動生成する場合: python main.py --phase 1
+═════════════════════════════════════════════════════════════════
