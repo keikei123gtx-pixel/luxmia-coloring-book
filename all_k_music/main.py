@@ -95,7 +95,6 @@ def build_log_entry(prompt: dict, result: dict) -> dict:
         "cover_path":      result.get("cover_path", ""),
         "audio_url":       result.get("audio_url", ""),
         "status":          result["status"],
-        "youtube_status":  "pending",
         "phase":           "1-generated",
         "notes":           "",
         # ── 証拠フィールド ────────────────────────────────────────────
@@ -354,94 +353,6 @@ def run_phase2(genre_filter: Optional[str] = None, style: str = "default") -> No
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Phase 4: YouTube アップロード
-# ─────────────────────────────────────────────────────────────────────────────
-def run_phase4(
-    genre_filter: Optional[str] = None,
-    style: str = "default",
-    privacy: str = "unlisted",
-) -> None:
-    from src.youtube_uploader import parse_seo_txt, upload_video  # noqa: PLC0415
-
-    logger.info("════════════════════════════════════════════════════════════")
-    logger.info("  Phase 4 — YouTube アップロード (privacy=%s)", privacy)
-    logger.info("════════════════════════════════════════════════════════════")
-
-    asset_log = load_asset_log()
-    slugs_done: set = set()
-
-    for video_1h in sorted(VIDEO_DIR.glob("*_1h.mp4"), reverse=True):
-        slug = next(
-            (s for s in ["lofi", "edm", "ambient", "synthwave"] if s in video_1h.name),
-            None,
-        )
-        if not slug or (genre_filter and slug != genre_filter):
-            continue
-        if slug in slugs_done:
-            continue
-        slugs_done.add(slug)
-
-        logger.info("\n── Phase4: %s  |  %s", slug, video_1h.name)
-
-        # SEO txt
-        seo_files = sorted(SEO_DIR.glob(f"*{slug}*_seo.txt"), reverse=True)
-        if not seo_files:
-            logger.warning("[Phase4] %s: SEO txt 見つからず — スキップ", slug)
-            continue
-        seo = parse_seo_txt(seo_files[0])
-        logger.info("[Phase4]   タイトル(JP): %s", seo["title_jp"])
-
-        # サムネイル
-        thumbs     = sorted(THUMB_DIR.glob(f"*{slug}*.jpg"), reverse=True)
-        thumb_path = thumbs[0] if thumbs else None
-
-        # 通常動画アップロード
-        url_long = upload_video(
-            video_1h,
-            title=seo["title_jp"],
-            description=seo["description"],
-            tags=seo["hashtags"],
-            thumbnail_path=thumb_path,
-            privacy=privacy,
-            is_shorts=False,
-        )
-
-        # Shorts アップロード
-        stem         = video_1h.stem.replace("_1h", "")
-        video_shorts = VIDEO_DIR / f"{stem}_shorts.mp4"
-        url_shorts   = None
-        if video_shorts.exists():
-            url_shorts = upload_video(
-                video_shorts,
-                title=seo["title_jp"],
-                description=seo["description"],
-                tags=seo["hashtags"],
-                thumbnail_path=thumb_path,
-                privacy=privacy,
-                is_shorts=True,
-            )
-
-        # ログ更新
-        for entry in asset_log:
-            if entry.get("genre_slug") == slug and entry.get("phase") == "3-video":
-                entry["phase"] = "4-uploaded"
-                entry["notes"] = (
-                    f"youtube_long={url_long or 'FAILED'}  "
-                    f"youtube_shorts={url_shorts or 'FAILED'}"
-                )
-                break
-        save_asset_log(asset_log)
-
-        logger.info(
-            "[Phase4] ✓ 完了: long=%s  shorts=%s",
-            url_long or "FAILED",
-            url_shorts or "FAILED",
-        )
-
-    logger.info("[Phase4] 全ジャンル処理完了")
-
-
-# ─────────────────────────────────────────────────────────────────────────────
 # Phase 3: 動画エンコード + SEO
 # ─────────────────────────────────────────────────────────────────────────────
 def run_phase3(genre_filter: Optional[str] = None, style: str = "default") -> None:
@@ -561,7 +472,7 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--phase",
-        choices=["0", "1", "2", "3", "4", "all"],
+        choices=["0", "1", "2", "3", "all"],
         default="0",
         help=(
             "実行フェーズ:\n"
@@ -569,7 +480,6 @@ def _parse_args() -> argparse.Namespace:
             "  1   = Suno 生成 + 証拠台帳記録\n"
             "  2   = メドレー + Human DNA + サムネイル\n"
             "  3   = 動画エンコード + SEO\n"
-            "  4   = YouTube アップロード\n"
             "  all = 全フェーズ連続実行"
         ),
     )
@@ -590,21 +500,14 @@ def _parse_args() -> argparse.Namespace:
             "  lofi_girl = 夜の部屋イラスト + 窓 (LoFi Girl 風)"
         ),
     )
-    parser.add_argument(
-        "--privacy",
-        choices=["unlisted", "public", "private"],
-        default="unlisted",
-        help="YouTube 公開設定 (Phase 4): unlisted=限定公開 / public=公開 / private=非公開",
-    )
     return parser.parse_args()
 
 
 if __name__ == "__main__":
-    args    = _parse_args()
-    phase   = args.phase
-    genre   = args.genre
-    style   = args.style
-    privacy = args.privacy
+    args  = _parse_args()
+    phase = args.phase
+    genre = args.genre
+    style = args.style
 
     if phase != "0":
         logger.info("╔═══════════════════════════════════════════════════════════╗")
@@ -624,9 +527,6 @@ if __name__ == "__main__":
 
     if phase in ("3", "all"):
         run_phase3(genre_filter=genre, style=style)
-
-    if phase in ("4", "all"):
-        run_phase4(genre_filter=genre, style=style, privacy=privacy)
 
     if phase not in ("0",):
         logger.info("\n✓ All k Music パイプライン完了")

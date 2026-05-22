@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git init *)",
+      "Bash(git add *)",
+      "Bash(git remote *)",
+      "Bash(git push *)",
+      "Bash(curl -s \"https://api.github.com/repos/keikei123gtx-pixel/luxmia-coloring-book/actions/runs?per_page=1\")",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); r=d['workflow_runs'][0]; print\\('Run ID:', r['id']\\); print\\('Status:', r['status']\\); print\\('Conclusion:', r['conclusion']\\); print\\('URL:', r['html_url']\\)\")",
+      "Bash(python3 *)"
+    ]
+  }
+}
