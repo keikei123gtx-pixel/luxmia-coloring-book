@@ -16,10 +16,6 @@ on:
           - ambient
           - synthwave
 
-  # 毎週月曜 JST 03:00 = UTC 18:00 (日曜) に自動実行
-  # ※週1ペースで楽曲資産を積み上げる。頻度は cron を調整してください。
-  schedule:
-    - cron: "0 18 * * 0"
 
 # music_assets.json / asset_vault.jsonl をリポジトリに書き戻すために必要
 permissions:

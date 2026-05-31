@@ -1,11 +1,6 @@
 name: All k Music — Phase 2 メドレー + Human DNA + サムネイル
 
 on:
-  # Phase 1 完了時に自動チェーン (成功時のみ)
-  workflow_run:
-    workflows: ["All k Music — Phase 1 Suno 楽曲生成"]
-    types: [completed]
-
   # 手動実行
   workflow_dispatch:
     inputs:
@@ -44,11 +39,6 @@ jobs:
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
     timeout-minutes: 60   # DNA 適用 × 4 ジャンル + メドレー生成の余裕
-
-    # workflow_run トリガー時: Phase 1 が成功した場合のみ実行
-    if: >-
-      github.event_name == 'workflow_dispatch' ||
-      github.event.workflow_run.conclusion == 'success'
 
     steps:
       # ── 1. チェックアウト ────────────────────────────────────────────────

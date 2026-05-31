@@ -1,11 +1,6 @@
 name: All k Music — Phase 3 動画エンコード + SEO
 
 on:
-  # Phase 2 完了時に自動チェーン (成功時のみ)
-  workflow_run:
-    workflows: ["All k Music — Phase 2 メドレー + Human DNA + サムネイル"]
-    types: [completed]
-
   # 手動実行
   workflow_dispatch:
     inputs:
@@ -44,11 +39,6 @@ jobs:
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
     timeout-minutes: 90   # 1時間動画エンコード × 4 ジャンル × 2形式 (通常 + Shorts)
-
-    # workflow_run トリガー時: Phase 2 が成功した場合のみ実行
-    if: >-
-      github.event_name == 'workflow_dispatch' ||
-      github.event.workflow_run.conclusion == 'success'
 
     steps:
       # ── 1. チェックアウト ────────────────────────────────────────────────
